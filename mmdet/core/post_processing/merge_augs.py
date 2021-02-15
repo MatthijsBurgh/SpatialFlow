@@ -14,7 +14,7 @@ def merge_aug_proposals(aug_proposals, img_metas, rpn_test_cfg):
             original image size.
 
         img_metas (list[dict]): list of image info dict where each dict has:
-            'img_shape', 'scale_factor', 'flip', and my also contain
+            'img_shape', 'scale_factor', 'flip', and may also contain
             'filename', 'ori_shape', 'pad_shape', and 'img_norm_cfg'.
             For details on the values of these keys see
             `mmdet/datasets/pipelines/formatting.py:Collect`.
@@ -47,11 +47,7 @@ def merge_aug_proposals(aug_proposals, img_metas, rpn_test_cfg):
     return merged_proposals
 
 
-def merge_aug_bboxes(aug_bboxes,
-                     aug_scores,
-                     img_metas,
-                     rcnn_test_cfg,
-                     return_mean=True):
+def merge_aug_bboxes(aug_bboxes, aug_scores, img_metas, rcnn_test_cfg):
     """Merge augmented detection bboxes and scores.
 
     Args:
@@ -65,24 +61,18 @@ def merge_aug_bboxes(aug_bboxes,
     """
     recovered_bboxes = []
     for bboxes, img_info in zip(aug_bboxes, img_metas):
-        img_shape = img_info['img_shape']
-        scale_factor = img_info['scale_factor']
-        flip = img_info['flip']
-        flip_direction = img_info['flip_direction']
+        img_shape = img_info[0]['img_shape']
+        scale_factor = img_info[0]['scale_factor']
+        flip = img_info[0]['flip']
+        flip_direction = img_info[0]['flip_direction']
         bboxes = bbox_mapping_back(bboxes, img_shape, scale_factor, flip,
                                    flip_direction)
         recovered_bboxes.append(bboxes)
-    if return_mean:
-        bboxes = torch.stack(recovered_bboxes).mean(dim=0)
-    else:
-        bboxes = torch.cat(recovered_bboxes, dim=0)
+    bboxes = torch.stack(recovered_bboxes).mean(dim=0)
     if aug_scores is None:
         return bboxes
     else:
-        if return_mean:
-            scores = torch.stack(aug_scores).mean(dim=0)
-        else:
-            scores = torch.cat(aug_scores, dim=0)
+        scores = torch.stack(aug_scores).mean(dim=0)
         return bboxes, scores
 
 
@@ -107,8 +97,8 @@ def merge_aug_masks(aug_masks, img_metas, rcnn_test_cfg, weights=None):
     """
     recovered_masks = []
     for mask, img_info in zip(aug_masks, img_metas):
-        flip = img_info['flip']
-        flip_direction = img_info['flip_direction']
+        flip = img_info[0]['flip']
+        flip_direction = img_info[0]['flip_direction']
         if flip:
             if flip_direction == 'horizontal':
                 mask = mask[:, :, :, ::-1]

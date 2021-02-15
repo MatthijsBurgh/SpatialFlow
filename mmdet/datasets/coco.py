@@ -2,6 +2,7 @@ import itertools
 import logging
 import os.path as osp
 import tempfile
+from collections import OrderedDict
 
 import mmcv
 import numpy as np
@@ -10,94 +11,38 @@ from pycocotools.coco import COCO
 from pycocotools.cocoeval import COCOeval
 from terminaltables import AsciiTable
 
-from mmdet.core import combine_panoptic_predictions, eval_recalls, pq_compute
+from mmdet.core import eval_recalls
 from .builder import DATASETS
 from .custom import CustomDataset
+
+try:
+    import pycocotools
+    if not hasattr(pycocotools, '__sphinx_mock__'):  # for doc generation
+        assert pycocotools.__version__ >= '12.0.2'
+except AssertionError:
+    raise AssertionError('Incompatible version of pycocotools is installed. '
+                         'Run pip uninstall pycocotools first. Then run pip '
+                         'install mmpycocotools to install open-mmlab forked '
+                         'pycocotools.')
 
 
 @DATASETS.register_module()
 class CocoDataset(CustomDataset):
-    """CocoDataset.
 
-    We add the `THINGS_CLASSES` and `STUFF_CLASSES` for panoptic segmentation.
-
-    Args:
-        map_stuff_cats (bool): Whether to map stuff categories to continuous
-            ids. In mmdetection, the seg category are not map to ids,
-            if we want to load HTC models of mmdetection, we can set it as
-            `False`. NOTE. If use `map_stuff_cats`, the `num_classes` of stuff
-            should be the number of categories.
-        with_panoptic (bool): Whether in the panoptic segmentation mode.
-            Only when `with_stuff` and `with_panoptic` are both `True`,
-            we are in the panoptic segmentation mode.
-        things_other (bool): Whether to map instance masks to one single
-            'other' category in segmentation. Only when `with_stuff` is
-            active, `things_other` is available.
-    """
-
-    THINGS_CLASSES = (
-        'person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus', 'train',
-        'truck', 'boat', 'traffic_light', 'fire_hydrant', 'stop_sign',
-        'parking_meter', 'bench', 'bird', 'cat', 'dog', 'horse', 'sheep',
-        'cow', 'elephant', 'bear', 'zebra', 'giraffe', 'backpack', 'umbrella',
-        'handbag', 'tie', 'suitcase', 'frisbee', 'skis', 'snowboard',
-        'sports_ball', 'kite', 'baseball_bat', 'baseball_glove', 'skateboard',
-        'surfboard', 'tennis_racket', 'bottle', 'wine_glass', 'cup', 'fork',
-        'knife', 'spoon', 'bowl', 'banana', 'apple', 'sandwich', 'orange',
-        'broccoli', 'carrot', 'hot_dog', 'pizza', 'donut', 'cake', 'chair',
-        'couch', 'potted_plant', 'bed', 'dining_table', 'toilet', 'tv',
-        'laptop', 'mouse', 'remote', 'keyboard', 'cell_phone', 'microwave',
-        'oven', 'toaster', 'sink', 'refrigerator', 'book', 'clock', 'vase',
-        'scissors', 'teddy_bear', 'hair_drier', 'toothbrush')
-    STUFF_CLASSES = ('banner', 'blanket', 'bridge', 'cardboard', 'counter',
-                     'curtain', 'door-stuff', 'floor-wood', 'flower', 'fruit',
-                     'gravel', 'house', 'light', 'mirror-stuff', 'net',
-                     'pillow', 'platform', 'playingfield', 'railroad', 'river',
-                     'road', 'roof', 'sand', 'sea', 'shelf', 'snow', 'stairs',
-                     'tent', 'towel', 'wall-brick', 'wall-stone', 'wall-tile',
-                     'wall-wood', 'water-other', 'window-blind',
-                     'window-other', 'things-other', 'tree-merged',
-                     'fence-merged', 'ceiling-merged', 'sky-other-merged',
-                     'cabinet-merged', 'table-merged', 'floor-other-merged',
-                     'pavement-merged', 'mountain-merged', 'grass-merged',
-                     'dirt-merged', 'paper-merged', 'food-other-merged',
-                     'building-other-merged', 'rock-merged',
-                     'wall-other-merged', 'rug-merged')
-    CLASSES = THINGS_CLASSES + STUFF_CLASSES
-
-    def __init__(self, with_panoptic=False, things_other=False, **kwargs):
-        # set as panoptic segmentation
-        self.with_panoptic = with_panoptic
-        # map things to `other` or keep the original category
-        self.things_other = things_other
-
-        super(CocoDataset, self).__init__(**kwargs)
-
-        self.cat2label = {cat_id: i for i, cat_id in enumerate(self.cat_ids)}
-        # for panoptic segmentation
-        self.seg_ids = [
-            92, 93, 95, 100, 107, 109, 112, 118, 119, 122, 125, 128, 130, 133,
-            138, 141, 144, 145, 147, 148, 149, 151, 154, 155, 156, 159, 161,
-            166, 168, 171, 175, 176, 177, 178, 180, 181, 183, 184, 185, 186,
-            187, 188, 189, 190, 191, 192, 193, 194, 195, 196, 197, 198, 199,
-            200
-        ]
-        if not self.things_other:
-            # remove 'things-other' (convert tuple to list)
-            self.STUFF_CLASSES = list(self.STUFF_CLASSES)
-            self.STUFF_CLASSES.remove('things-other')
-            self.STUFF_CLASSES = tuple(self.STUFF_CLASSES)
-            # remove the `things-other` cat id
-            self.seg_ids.remove(183)
-            # when perform panoptic segmentation, thing classes will be
-            # considered once not things_other
-            if self.with_panoptic:
-                self.STUFF_CLASSES = self.THINGS_CLASSES + self.STUFF_CLASSES
-                self.seg_ids = self.cat_ids + self.seg_ids
-        self.seg2label = {
-            seg_id: i + 1
-            for i, seg_id in enumerate(self.seg_ids)
-        }
+    CLASSES = ('person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus',
+               'train', 'truck', 'boat', 'traffic light', 'fire hydrant',
+               'stop sign', 'parking meter', 'bench', 'bird', 'cat', 'dog',
+               'horse', 'sheep', 'cow', 'elephant', 'bear', 'zebra', 'giraffe',
+               'backpack', 'umbrella', 'handbag', 'tie', 'suitcase', 'frisbee',
+               'skis', 'snowboard', 'sports ball', 'kite', 'baseball bat',
+               'baseball glove', 'skateboard', 'surfboard', 'tennis racket',
+               'bottle', 'wine glass', 'cup', 'fork', 'knife', 'spoon', 'bowl',
+               'banana', 'apple', 'sandwich', 'orange', 'broccoli', 'carrot',
+               'hot dog', 'pizza', 'donut', 'cake', 'chair', 'couch',
+               'potted plant', 'bed', 'dining table', 'toilet', 'tv', 'laptop',
+               'mouse', 'remote', 'keyboard', 'cell phone', 'microwave',
+               'oven', 'toaster', 'sink', 'refrigerator', 'book', 'clock',
+               'vase', 'scissors', 'teddy bear', 'hair drier', 'toothbrush')
 
     def load_annotations(self, ann_file):
         """Load annotation from COCO style annotation file.
@@ -110,11 +55,12 @@ class CocoDataset(CustomDataset):
         """
 
         self.coco = COCO(ann_file)
-        self.cat_ids = self.coco.getCatIds()
-        self.img_ids = self.coco.getImgIds()
+        self.cat_ids = self.coco.get_cat_ids(cat_names=self.CLASSES)
+        self.cat2label = {cat_id: i for i, cat_id in enumerate(self.cat_ids)}
+        self.img_ids = self.coco.get_img_ids()
         data_infos = []
         for i in self.img_ids:
-            info = self.coco.loadImgs([i])[0]
+            info = self.coco.load_imgs([i])[0]
             info['filename'] = info['file_name']
             data_infos.append(info)
         return data_infos
@@ -130,8 +76,8 @@ class CocoDataset(CustomDataset):
         """
 
         img_id = self.data_infos[idx]['id']
-        ann_ids = self.coco.getAnnIds(imgIds=[img_id])
-        ann_info = self.coco.loadAnns(ann_ids)
+        ann_ids = self.coco.get_ann_ids(img_ids=[img_id])
+        ann_info = self.coco.load_anns(ann_ids)
         return self._parse_ann_info(self.data_infos[idx], ann_info)
 
     def get_cat_ids(self, idx):
@@ -145,45 +91,33 @@ class CocoDataset(CustomDataset):
         """
 
         img_id = self.data_infos[idx]['id']
-        ann_ids = self.coco.getAnnIds(imgIds=[img_id])
-        ann_info = self.coco.loadAnns(ann_ids)
+        ann_ids = self.coco.get_ann_ids(img_ids=[img_id])
+        ann_info = self.coco.load_anns(ann_ids)
         return [ann['category_id'] for ann in ann_info]
 
     def _filter_imgs(self, min_size=32):
         """Filter images too small or without ground truths."""
         valid_inds = []
+        # obtain images that contain annotation
         ids_with_ann = set(_['image_id'] for _ in self.coco.anns.values())
+        # obtain images that contain annotations of the required categories
+        ids_in_cat = set()
+        for i, class_id in enumerate(self.cat_ids):
+            ids_in_cat |= set(self.coco.cat_img_map[class_id])
+        # merge the image id sets of the two conditions and use the merged set
+        # to filter out images if self.filter_empty_gt=True
+        ids_in_cat &= ids_with_ann
+
+        valid_img_ids = []
         for i, img_info in enumerate(self.data_infos):
-            if self.filter_empty_gt and self.img_ids[i] not in ids_with_ann:
+            img_id = self.img_ids[i]
+            if self.filter_empty_gt and img_id not in ids_in_cat:
                 continue
             if min(img_info['width'], img_info['height']) >= min_size:
                 valid_inds.append(i)
+                valid_img_ids.append(img_id)
+        self.img_ids = valid_img_ids
         return valid_inds
-
-    def get_subset_by_classes(self):
-        """Get img ids that contain any category in class_ids.
-
-        Different from the coco.getImgIds(), this function returns the id if
-        the img contains one of the categories rather than all.
-
-        Args:
-            class_ids (list[int]): list of category ids
-
-        Return:
-            ids (list[int]): integer list of img ids
-        """
-
-        ids = set()
-        for i, class_id in enumerate(self.cat_ids):
-            ids |= set(self.coco.cat_img_map[class_id])
-        self.img_ids = list(ids)
-
-        data_infos = []
-        for i in self.img_ids:
-            info = self.coco.load_imgs([i])[0]
-            info['filename'] = info['file_name']
-            data_infos.append(info)
-        return data_infos
 
     def _parse_ann_info(self, img_info, ann_info):
         """Parse bbox and mask annotation.
@@ -219,7 +153,7 @@ class CocoDataset(CustomDataset):
             else:
                 gt_bboxes.append(bbox)
                 gt_labels.append(self.cat2label[ann['category_id']])
-                gt_masks_ann.append(ann['segmentation'])
+                gt_masks_ann.append(ann.get('segmentation', None))
 
         if gt_bboxes:
             gt_bboxes = np.array(gt_bboxes, dtype=np.float32)
@@ -241,7 +175,6 @@ class CocoDataset(CustomDataset):
             bboxes_ignore=gt_bboxes_ignore,
             masks=gt_masks_ann,
             seg_map=seg_map)
-        ann['seg2label'] = self.seg2label
 
         return ann
 
@@ -335,58 +268,6 @@ class CocoDataset(CustomDataset):
                     segm_json_results.append(data)
         return bbox_json_results, segm_json_results
 
-    def _panoptic2json(self, results):
-        bbox_json_results = []
-        segm_json_results = []
-        stuff_json_results = []
-        for idx in range(len(self)):
-            img_id = self.img_ids[idx]
-            det, seg, stuff = results[idx]
-            for thing_label in range(len(det)):
-                # bbox results
-                bboxes = det[thing_label]
-                for i in range(bboxes.shape[0]):
-                    det_data = dict()
-                    det_data['image_id'] = img_id
-                    det_data['bbox'] = self.xyxy2xywh(bboxes[i])
-                    det_data['score'] = float(bboxes[i][4])
-                    det_data['category_id'] = self.cat_ids[thing_label]
-                    bbox_json_results.append(det_data)
-
-                # segm results
-                # some detectors use different score for det and segm
-                if len(seg) == 2:
-                    segms = seg[0][thing_label]
-                    mask_score = seg[1][thing_label]
-                else:
-                    segms = seg[thing_label]
-                    mask_score = [bbox[4] for bbox in bboxes]
-                for i in range(bboxes.shape[0]):
-                    segm_data = dict()
-                    segm_data['image_id'] = img_id
-                    segm_data['score'] = float(mask_score[i])
-                    segm_data['category_id'] = self.cat_ids[thing_label]
-                    segms[i]['counts'] = segms[i]['counts'].decode()
-                    segm_data['segmentation'] = segms[i]
-                    segm_json_results.append(segm_data)
-
-            for stuff_label in range(len(stuff)):
-                stuff_label_result = stuff[stuff_label]
-                assert isinstance(stuff_label_result, list)
-                if len(stuff_label_result) == 0:
-                    continue
-                else:
-                    stuff_label_result = stuff_label_result[0]
-                stuff_data = dict()
-                stuff_data['image_id'] = img_id
-                stuff_data['category_id'] = self.seg_ids[stuff_label]
-                stuff_label_result['counts'] = \
-                    stuff_label_result['counts'].decode()
-                stuff_data['segmentation'] = stuff_label_result
-                stuff_json_results.append(stuff_data)
-
-        return bbox_json_results, segm_json_results, stuff_json_results
-
     def results2json(self, results, outfile_prefix):
         """Dump the detection results to a COCO style json file.
 
@@ -413,24 +294,12 @@ class CocoDataset(CustomDataset):
             result_files['proposal'] = f'{outfile_prefix}.bbox.json'
             mmcv.dump(json_results, result_files['bbox'])
         elif isinstance(results[0], tuple):
-            # instance segmentation
-            if len(results[0]) == 2:
-                json_results = self._segm2json(results)
-                result_files['bbox'] = f'{outfile_prefix}.bbox.json'
-                result_files['proposal'] = f'{outfile_prefix}.bbox.json'
-                result_files['segm'] = f'{outfile_prefix}.segm.json'
-                mmcv.dump(json_results[0], result_files['bbox'])
-                mmcv.dump(json_results[1], result_files['segm'])
-            # panoptic segmentation
-            elif len(results[0]) == 3:
-                json_results = self._panoptic2json(results)
-                result_files['bbox'] = f'{outfile_prefix}.bbox.json'
-                result_files['proposal'] = f'{outfile_prefix}.bbox.json'
-                result_files['segm'] = f'{outfile_prefix}.segm.json'
-                result_files['stuff'] = f'{outfile_prefix}.stuff.json'
-                mmcv.dump(json_results[0], result_files['bbox'])
-                mmcv.dump(json_results[1], result_files['segm'])
-                mmcv.dump(json_results[2], result_files['stuff'])
+            json_results = self._segm2json(results)
+            result_files['bbox'] = f'{outfile_prefix}.bbox.json'
+            result_files['proposal'] = f'{outfile_prefix}.bbox.json'
+            result_files['segm'] = f'{outfile_prefix}.segm.json'
+            mmcv.dump(json_results[0], result_files['bbox'])
+            mmcv.dump(json_results[1], result_files['segm'])
         elif isinstance(results[0], np.ndarray):
             json_results = self._proposal2json(results)
             result_files['proposal'] = f'{outfile_prefix}.proposal.json'
@@ -499,8 +368,7 @@ class CocoDataset(CustomDataset):
                  classwise=False,
                  proposal_nums=(100, 300, 1000),
                  iou_thrs=None,
-                 metric_items=None,
-                 cfg=None):
+                 metric_items=None):
         """Evaluation in COCO protocol.
 
         Args:
@@ -533,9 +401,7 @@ class CocoDataset(CustomDataset):
         """
 
         metrics = metric if isinstance(metric, list) else [metric]
-        allowed_metrics = [
-            'bbox', 'segm', 'proposal', 'proposal_fast', 'panoptic'
-        ]
+        allowed_metrics = ['bbox', 'segm', 'proposal', 'proposal_fast']
         for metric in metrics:
             if metric not in allowed_metrics:
                 raise KeyError(f'metric {metric} is not supported')
@@ -548,36 +414,13 @@ class CocoDataset(CustomDataset):
 
         result_files, tmp_dir = self.format_results(results, jsonfile_prefix)
 
-        eval_results = {}
+        eval_results = OrderedDict()
         cocoGt = self.coco
         for metric in metrics:
             msg = f'Evaluating {metric}...'
             if logger is None:
                 msg = '\n' + msg
             print_log(msg, logger=logger)
-
-            if metric == 'panoptic':
-                ins_out_file = result_files['segm']
-                stuff_out_file = result_files['stuff']
-                bbox_out_file = result_files['bbox']
-                using_bbox = cfg.get('using_bbox', False)
-                bbox_overlap_thr = cfg.get('bbox_overlap_thr', 0.)
-                combine_panoptic_predictions(
-                    stuff_out_file,
-                    ins_out_file,
-                    bbox_out_file,
-                    cfg.images_json_file,
-                    cfg.categories_json_file,
-                    cfg.segmentations_folder,
-                    cfg.panoptic_json_file,
-                    cfg.confidence_thr,
-                    bbox_overlap_thr,
-                    cfg.overlap_thr,
-                    cfg.stuff_area_limit,
-                    using_bbox=using_bbox)
-                pq_compute(cfg.gt_json_file, cfg.panoptic_json_file,
-                           cfg.gt_folder, cfg.segmentations_folder, logger)
-                return 'Panoptic Segmentation Evaluated successfully!!!'
 
             if metric == 'proposal_fast':
                 ar = self.fast_eval_recall(

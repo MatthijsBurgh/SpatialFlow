@@ -5,13 +5,12 @@ import tempfile
 import time
 
 import mmcv
-import numpy as np
-import pycocotools.mask as mask_util
 import torch
 import torch.distributed as dist
+from mmcv.image import tensor2imgs
 from mmcv.runner import get_dist_info
 
-from mmdet.core import encode_mask_results, tensor2imgs
+from mmdet.core import encode_mask_results
 
 
 def single_gpu_test(model,
@@ -27,13 +26,17 @@ def single_gpu_test(model,
         with torch.no_grad():
             result = model(return_loss=False, rescale=True, **data)
 
+        batch_size = len(result)
         if show or out_dir:
-            img_tensor = data['img'][0]
+            if batch_size == 1 and isinstance(data['img'][0], torch.Tensor):
+                img_tensor = data['img'][0]
+            else:
+                img_tensor = data['img'][0].data[0]
             img_metas = data['img_metas'][0].data[0]
             imgs = tensor2imgs(img_tensor, **img_metas[0]['img_norm_cfg'])
             assert len(imgs) == len(img_metas)
 
-            for img, img_meta in zip(imgs, img_metas):
+            for i, (img, img_meta) in enumerate(zip(imgs, img_metas)):
                 h, w, _ = img_meta['img_shape']
                 img_show = img[:h, :w, :]
 
@@ -47,15 +50,19 @@ def single_gpu_test(model,
 
                 model.module.show_result(
                     img_show,
-                    result,
+                    result[i],
                     show=show,
                     out_file=out_file,
                     score_thr=show_score_thr)
 
-        batch_size = len(data['img_metas'][0].data)
+        # encode mask results
+        if isinstance(result[0], tuple):
+            result = [(bbox_results, encode_mask_results(mask_results))
+                      for bbox_results, mask_results in result]
+        results.extend(result)
+
         for _ in range(batch_size):
             prog_bar.update()
-        results.append(encode_segms([result], dataset)[0])
     return results
 
 
@@ -88,14 +95,16 @@ def multi_gpu_test(model, data_loader, tmpdir=None, gpu_collect=False):
     for i, data in enumerate(data_loader):
         with torch.no_grad():
             result = model(return_loss=False, rescale=True, **data)
+            # encode mask results
+            if isinstance(result[0], tuple):
+                result = [(bbox_results, encode_mask_results(mask_results))
+                          for bbox_results, mask_results in result]
+        results.extend(result)
 
         if rank == 0:
-            batch_size = (
-                len(data['img_meta'].data)
-                if 'img_meta' in data else len(data['img_metas'][0].data))
+            batch_size = len(result)
             for _ in range(batch_size * world_size):
                 prog_bar.update()
-        results.append(encode_segms([result], dataset)[0])
 
     # collect results from all ranks
     if gpu_collect:
@@ -103,40 +112,6 @@ def multi_gpu_test(model, data_loader, tmpdir=None, gpu_collect=False):
     else:
         results = collect_results_cpu(results, len(dataset), tmpdir)
     return results
-
-
-def encode_segms(results, dataset):
-    new_results = []
-    for result in results:
-        # encode mask results
-        if isinstance(result, tuple):
-            if len(result) == 2:
-                bbox_results, mask_results = result
-            elif len(result) == 3:
-                bbox_results, mask_results, stuff_results = result
-            else:
-                raise ValueError('Wrong result.')
-            encoded_mask_results = encode_mask_results(mask_results)
-            if len(result) == 2:
-                result = bbox_results, encoded_mask_results
-            elif len(result) == 3:
-                stuff_segms = [[] for _ in range(len(dataset.seg_ids))]
-                stuff_map = stuff_results['stuff_map']
-                stuff_img_shape = stuff_results['img_shape']
-                stuff_map = mmcv.imresize(
-                    stuff_map, stuff_img_shape, interpolation='nearest')
-                unique_stuffs = np.unique(stuff_map)
-                for j in unique_stuffs:
-                    stuff_class_mask = (stuff_map == j).astype(np.uint8)
-                    rle = mask_util.encode(
-                        np.array(
-                            stuff_class_mask[:, :, np.newaxis], order='F'))[0]
-                    stuff_segms[j].append(rle)
-                result = bbox_results, encoded_mask_results, stuff_segms
-            else:
-                raise ValueError('Wrong result.')
-        new_results.append(result)
-    return new_results
 
 
 def collect_results_cpu(result_part, size, tmpdir=None):
@@ -150,7 +125,8 @@ def collect_results_cpu(result_part, size, tmpdir=None):
                                 dtype=torch.uint8,
                                 device='cuda')
         if rank == 0:
-            tmpdir = tempfile.mkdtemp()
+            mmcv.mkdir_or_exist('.dist_test')
+            tmpdir = tempfile.mkdtemp(dir='.dist_test')
             tmpdir = torch.tensor(
                 bytearray(tmpdir.encode()), dtype=torch.uint8, device='cuda')
             dir_tensor[:len(tmpdir)] = tmpdir

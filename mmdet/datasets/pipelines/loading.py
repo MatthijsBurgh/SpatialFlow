@@ -78,6 +78,38 @@ class LoadImageFromFile(object):
 
 
 @PIPELINES.register_module()
+class LoadImageFromWebcam(LoadImageFromFile):
+    """Load an image from webcam.
+
+    Similar with :obj:`LoadImageFromFile`, but the image read from webcam is in
+    ``results['img']``.
+    """
+
+    def __call__(self, results):
+        """Call functions to add image meta information.
+
+        Args:
+            results (dict): Result dict with Webcam read image in
+                ``results['img']``.
+
+        Returns:
+            dict: The dict contains loaded image and meta information.
+        """
+
+        img = results['img']
+        if self.to_float32:
+            img = img.astype(np.float32)
+
+        results['filename'] = None
+        results['ori_filename'] = None
+        results['img'] = img
+        results['img_shape'] = img.shape
+        results['ori_shape'] = img.shape
+        results['img_fields'] = ['img']
+        return results
+
+
+@PIPELINES.register_module()
 class LoadMultiChannelImageFromFiles(object):
     """Load multi-channel images from a list of separate channel files.
 
@@ -185,14 +217,12 @@ class LoadAnnotations(object):
                  with_label=True,
                  with_mask=False,
                  with_seg=False,
-                 map_seg_cats=True,
                  poly2mask=True,
                  file_client_args=dict(backend='disk')):
         self.with_bbox = with_bbox
         self.with_label = with_label
         self.with_mask = with_mask
         self.with_seg = with_seg
-        self.map_seg_cats = map_seg_cats
         self.poly2mask = poly2mask
         self.file_client_args = file_client_args.copy()
         self.file_client = None
@@ -299,25 +329,6 @@ class LoadAnnotations(object):
         results['mask_fields'].append('gt_masks')
         return results
 
-    def _map_seg_cats(self, results):
-        if self.with_seg and self.map_seg_cats:
-            gt_seg = results['gt_semantic_seg']
-            shape = gt_seg.shape
-            seg2label = results['ann_info']['seg2label']
-            seg_labels = np.zeros(shape[:2], dtype=np.uint8)
-            for seg_cat, label in seg2label.items():
-                if len(shape) == 3:
-                    m = np.all(
-                        gt_seg == np.array(seg_cat).reshape(1, 1, 3), axis=2)
-                else:
-                    m = gt_seg == seg_cat
-                seg_labels[m] = label
-            # add ignore label 255, and other labels are 0-based
-            seg_labels += 255
-            gt_seg = seg_labels
-            results['gt_semantic_seg'] = gt_seg
-        return results
-
     def _load_semantic_seg(self, results):
         """Private function to load semantic segmentation annotations.
 
@@ -336,7 +347,6 @@ class LoadAnnotations(object):
         img_bytes = self.file_client.get(filename)
         results['gt_semantic_seg'] = mmcv.imfrombytes(
             img_bytes, flag='unchanged').squeeze()
-        results = self._map_seg_cats(results)
         results['seg_fields'].append('gt_semantic_seg')
         return results
 
@@ -368,8 +378,8 @@ class LoadAnnotations(object):
         repr_str += f'(with_bbox={self.with_bbox}, '
         repr_str += f'with_label={self.with_label}, '
         repr_str += f'with_mask={self.with_mask}, '
-        repr_str += f'with_seg={self.with_seg})'
-        repr_str += f'poly2mask={self.poly2mask})'
+        repr_str += f'with_seg={self.with_seg}, '
+        repr_str += f'poly2mask={self.poly2mask}, '
         repr_str += f'poly2mask={self.file_client_args})'
         return repr_str
 
@@ -417,3 +427,32 @@ class LoadProposals(object):
     def __repr__(self):
         return self.__class__.__name__ + \
             f'(num_max_proposals={self.num_max_proposals})'
+
+
+@PIPELINES.register_module()
+class FilterAnnotations(object):
+    """Filter invalid annotations.
+
+    Args:
+        min_gt_bbox_wh (tuple[int]): Minimum width and height of ground truth
+            boxes.
+    """
+
+    def __init__(self, min_gt_bbox_wh):
+        # TODO: add more filter options
+        self.min_gt_bbox_wh = min_gt_bbox_wh
+
+    def __call__(self, results):
+        assert 'gt_bboxes' in results
+        gt_bboxes = results['gt_bboxes']
+        w = gt_bboxes[:, 2] - gt_bboxes[:, 0]
+        h = gt_bboxes[:, 3] - gt_bboxes[:, 1]
+        keep = (w > self.min_gt_bbox_wh[0]) & (h > self.min_gt_bbox_wh[1])
+        if not keep.any():
+            return None
+        else:
+            keys = ('gt_bboxes', 'gt_labels', 'gt_masks', 'gt_semantic_seg')
+            for key in keys:
+                if key in results:
+                    results[key] = results[key][keep]
+            return results
