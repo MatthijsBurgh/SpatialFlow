@@ -18,8 +18,8 @@ from .reppoints_detector import RepPointsDetector
 from .retinanet import RetinaNet
 from .rpn import RPN
 from .single_stage import SingleStageDetector
-from .two_stage import TwoStageDetector
 from .spatialflow import SpatialFlow
+from .two_stage import TwoStageDetector
 
 __all__ = [
     'ATSS', 'BaseDetector', 'SingleStageDetector', 'TwoStageDetector', 'RPN',

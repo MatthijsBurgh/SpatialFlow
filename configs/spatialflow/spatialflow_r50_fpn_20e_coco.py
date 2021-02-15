@@ -6,5 +6,5 @@ _base_ = [
 # optimizer
 optimizer = dict(type='SGD', lr=0.005, momentum=0.9, weight_decay=0.0001)
 # panoptic settings
-segmentations_folder='./work_dirs/spatialflow_r50_fpn_20e_coco/segmentations_folder_val_pred/'
-panoptic_json_file='./work_dirs/spatialflow_r50_fpn_20e_coco/panoptic_val_pred.json'
+segmentations_folder = './work_dirs/spatialflow_r50_fpn_20e_coco/segmentations_folder_val_pred/'
+panoptic_json_file = './work_dirs/spatialflow_r50_fpn_20e_coco/panoptic_val_pred.json'

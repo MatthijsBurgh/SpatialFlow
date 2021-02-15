@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from mmcv.cnn import normal_init, bias_init_with_prob, ConvModule
+from mmcv.cnn import ConvModule, bias_init_with_prob, normal_init
 
 from mmdet.core import multi_apply
 from ..builder import HEADS
@@ -9,9 +9,8 @@ from .anchor_head import AnchorHead
 
 @HEADS.register_module()
 class SpatialFlowHead(AnchorHead):
-    """SpatialFlow Head.
-    There are four parallel sub-networks in the SpatialFlowHead,
-    which are cls, reg, mask, and stuff sub-networks.
+    """SpatialFlow Head. There are four parallel sub-networks in the
+    SpatialFlowHead, which are cls, reg, mask, and stuff sub-networks.
 
     We design spatial flows among all sub-networks, and also a stuff-mask path.
 
@@ -76,8 +75,10 @@ class SpatialFlowHead(AnchorHead):
         self.conv_cfg = conv_cfg
         self.norm_cfg = norm_cfg
         super(SpatialFlowHead, self).__init__(
-            num_classes, in_channels,
-            anchor_generator=anchor_generator, **kwargs)
+            num_classes,
+            in_channels,
+            anchor_generator=anchor_generator,
+            **kwargs)
 
     def _init_layers(self):
         self.cls_convs = nn.ModuleList()
@@ -317,12 +318,10 @@ class SpatialFlowHead(AnchorHead):
                     o1, o2, mask = torch.chunk(out, 3, dim=1)
                     offset = torch.cat((o1, o2), dim=1)
                     mask = torch.sigmoid(mask)
-                    mask_feat = mask_feat + stuff_mask_flow_conv(
-                        stuff_feat)
+                    mask_feat = mask_feat + stuff_mask_flow_conv(stuff_feat)
                     mask_feat = mask_conv(mask_feat, offset, mask)
                 else:
-                    mask_feat = mask_feat + stuff_mask_flow_conv(
-                        stuff_feat)
+                    mask_feat = mask_feat + stuff_mask_flow_conv(stuff_feat)
                     mask_feat = mask_conv(mask_feat +
                                           mask_spatial_flow_conv(reg_feat))
         cls_score = self.retina_cls(cls_feat)
@@ -333,8 +332,8 @@ class SpatialFlowHead(AnchorHead):
         cls_score_list = []
         bbox_pred_list = []
         (cls_score_list1, bbox_pred_list1, stuff_feat_list,
-         mask_feats_list) = multi_apply(
-            self.forward_single_bbox_stuff, feats[:3])
+         mask_feats_list) = multi_apply(self.forward_single_bbox_stuff,
+                                        feats[:3])
         cls_score_list.extend(cls_score_list1)
         bbox_pred_list.extend(bbox_pred_list1)
 
@@ -343,5 +342,5 @@ class SpatialFlowHead(AnchorHead):
         cls_score_list.extend(cls_score_list2)
         bbox_pred_list.extend(bbox_pred_list2)
 
-        return (cls_score_list, bbox_pred_list,
-                tuple(stuff_feat_list), tuple(mask_feats_list))
+        return (cls_score_list, bbox_pred_list, tuple(stuff_feat_list),
+                tuple(mask_feats_list))

@@ -104,6 +104,7 @@ def multi_gpu_test(model, data_loader, tmpdir=None, gpu_collect=False):
         results = collect_results_cpu(results, len(dataset), tmpdir)
     return results
 
+
 def encode_segms(results, dataset):
     new_results = []
     for result in results:
@@ -122,14 +123,14 @@ def encode_segms(results, dataset):
                 stuff_segms = [[] for _ in range(len(dataset.seg_ids))]
                 stuff_map = stuff_results['stuff_map']
                 stuff_img_shape = stuff_results['img_shape']
-                stuff_map = mmcv.imresize(stuff_map, stuff_img_shape,
-                                          interpolation='nearest')
+                stuff_map = mmcv.imresize(
+                    stuff_map, stuff_img_shape, interpolation='nearest')
                 unique_stuffs = np.unique(stuff_map)
                 for j in unique_stuffs:
                     stuff_class_mask = (stuff_map == j).astype(np.uint8)
                     rle = mask_util.encode(
-                        np.array(stuff_class_mask[:, :, np.newaxis],
-                                 order='F'))[0]
+                        np.array(
+                            stuff_class_mask[:, :, np.newaxis], order='F'))[0]
                     stuff_segms[j].append(rle)
                 result = bbox_results, encoded_mask_results, stuff_segms
             else:

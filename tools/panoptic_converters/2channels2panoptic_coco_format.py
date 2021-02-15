@@ -14,45 +14,44 @@ corresponding to stuff segments.
 Panoptic COCO format is described fully in http://cocodataset.org/#format-data.
 It is used for the Panoptic COCO challenge evaluation.
 """
-from __future__ import (print_function, absolute_import, division,
+from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
-
-import os
-import os.path as osp
-
 import argparse
 import multiprocessing
+import os
+import os.path as osp
+import time
+
 import mmcv
 import numpy as np
 import PIL.Image as Image
-import time
 
-from mmdet.core import get_traceback, IdGenerator, MyJsonEncoder
+from mmdet.core import IdGenerator, MyJsonEncoder, get_traceback
 
 OFFSET = 1000
 
 
 @get_traceback
-def convert_single_core(proc_id, image_set, categories,
-                        source_folder, segmentations_folder, VOID=0):
+def convert_single_core(proc_id,
+                        image_set,
+                        categories,
+                        source_folder,
+                        segmentations_folder,
+                        VOID=0):
     annotations = []
     for working_idx, image_info in enumerate(image_set):
         if working_idx % 100 == 0:
-            print(
-                'Core: {}, {} from {} images converted'.format(
-                    proc_id,
-                    working_idx,
-                    len(image_set)))
+            print('Core: {}, {} from {} images converted'.format(
+                proc_id, working_idx, len(image_set)))
 
         file_name = '{}.png'.format(image_info['file_name'].rsplit('.')[0])
         try:
             original_format = np.array(
-                Image.open(
-                    osp.join(source_folder, file_name)), dtype=np.uint32)
+                Image.open(osp.join(source_folder, file_name)),
+                dtype=np.uint32)
         except IOError:
-            raise KeyError(
-                'no prediction png file for id: {}'.format(
-                    image_info['id']))
+            raise KeyError('no prediction png file for id: {}'.format(
+                image_info['id']))
 
         pan = OFFSET * original_format[:, :, 0] + original_format[:, :, 1]
         pan_format = np.zeros(
@@ -72,12 +71,13 @@ def convert_single_core(proc_id, image_set, categories,
             mask = pan == el
             segment_id, color = id_generator.get_id_and_color(sem)
             pan_format[mask] = color
-            segm_info.append({"id": segment_id,
-                              "category_id": sem})
+            segm_info.append({'id': segment_id, 'category_id': sem})
 
-        annotations.append({'image_id': image_info['id'],
-                            'file_name': file_name,
-                            "segments_info": segm_info})
+        annotations.append({
+            'image_id': image_info['id'],
+            'file_name': file_name,
+            'segments_info': segm_info
+        })
 
         Image.fromarray(pan_format).save(
             osp.join(segmentations_folder, file_name))
@@ -85,12 +85,15 @@ def convert_single_core(proc_id, image_set, categories,
     return annotations
 
 
-def converter(source_folder, images_json_file, categories_json_file,
-              segmentations_folder, predictions_json_file,
+def converter(source_folder,
+              images_json_file,
+              categories_json_file,
+              segmentations_folder,
+              predictions_json_file,
               VOID=0):
     start_time = time.time()
 
-    print("Reading image set information from {}".format(images_json_file))
+    print('Reading image set information from {}'.format(images_json_file))
 
     d_coco = mmcv.load(images_json_file)
     images = d_coco['images']
@@ -101,72 +104,80 @@ def converter(source_folder, images_json_file, categories_json_file,
     if segmentations_folder is None:
         segmentations_folder = predictions_json_file.rsplit('.', 1)[0]
     if not osp.isdir(segmentations_folder):
-        print("Creating folder {} for panoptic segmentation PNGs".format(
+        print('Creating folder {} for panoptic segmentation PNGs'.format(
             segmentations_folder))
         os.mkdir(segmentations_folder)
 
-    print("CONVERTING...")
-    print("2 channels panoptic format:")
-    print("\tSource folder: {}".format(source_folder))
-    print("TO")
-    print("COCO panoptic format:")
-    print("\tSegmentation folder: {}".format(segmentations_folder))
-    print("\tJSON file: {}".format(predictions_json_file))
+    print('CONVERTING...')
+    print('2 channels panoptic format:')
+    print('\tSource folder: {}'.format(source_folder))
+    print('TO')
+    print('COCO panoptic format:')
+    print('\tSegmentation folder: {}'.format(segmentations_folder))
+    print('\tJSON file: {}'.format(predictions_json_file))
     print('\n')
     cpu_num = multiprocessing.cpu_count()
     images_split = np.array_split(images, cpu_num)
-    print(
-        "Number of cores: {}, images per core: {}".format(
-            cpu_num, len(
-                images_split[0])))
+    print('Number of cores: {}, images per core: {}'.format(
+        cpu_num, len(images_split[0])))
     workers = multiprocessing.Pool(processes=cpu_num)
     processes = []
     for proc_id, image_set in enumerate(images_split):
         p = workers.apply_async(convert_single_core,
-                                (proc_id, image_set, categories,
-                                 source_folder, segmentations_folder, VOID))
+                                (proc_id, image_set, categories, source_folder,
+                                 segmentations_folder, VOID))
         processes.append(p)
     annotations = []
     for p in processes:
         annotations.extend(p.get())
 
-    print("Writing final JSON in {}".format(predictions_json_file))
+    print('Writing final JSON in {}'.format(predictions_json_file))
     d_coco['annotations'] = annotations
     mmcv.dump(d_coco, predictions_json_file, cls=MyJsonEncoder)
 
     t_delta = time.time() - start_time
-    print("Time elapsed: {:0.2f} seconds".format(t_delta))
+    print('Time elapsed: {:0.2f} seconds'.format(t_delta))
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     parser = argparse.ArgumentParser(
-        description="This script converts panoptic segmentation predictions "
-                    "stored in 2 channels panoptic format to COCO panoptic "
-                    "format. See this file's head for more information."
-    )
-    parser.add_argument('--source_folder', type=str,
-                        help="folder that contains predictions in 2 channels "
-                             "PNG format")
-    parser.add_argument('--images_json_file', type=str,
-                        help="JSON file with correponding image set "
-                             "information")
-    parser.add_argument('--categories_json_file', type=str,
-                        help="JSON file with Panoptic COCO categories "
-                             "information",
-                        default='./panoptic_coco_categories.json')
+        description='This script converts panoptic segmentation predictions '
+        'stored in 2 channels panoptic format to COCO panoptic '
+        "format. See this file's head for more information.")
     parser.add_argument(
-        '--segmentations_folder', type=str, default=None,
-        help="Folder with panoptic COCO format segmentations. Default: X if "
-             "input_json_file is X.json")
-    parser.add_argument('--predictions_json_file', type=str,
-                        help="JSON file with resulting COCO format prediction")
-    parser.add_argument('-v', '--void', type=int, default=0,
-                        help="semantic id that corresponds to VOID region in "
-                             "two channels PNG format")
+        '--source_folder',
+        type=str,
+        help='folder that contains predictions in 2 channels '
+        'PNG format')
+    parser.add_argument(
+        '--images_json_file',
+        type=str,
+        help='JSON file with correponding image set '
+        'information')
+    parser.add_argument(
+        '--categories_json_file',
+        type=str,
+        help='JSON file with Panoptic COCO categories '
+        'information',
+        default='./panoptic_coco_categories.json')
+    parser.add_argument(
+        '--segmentations_folder',
+        type=str,
+        default=None,
+        help='Folder with panoptic COCO format segmentations. Default: X if '
+        'input_json_file is X.json')
+    parser.add_argument(
+        '--predictions_json_file',
+        type=str,
+        help='JSON file with resulting COCO format prediction')
+    parser.add_argument(
+        '-v',
+        '--void',
+        type=int,
+        default=0,
+        help='semantic id that corresponds to VOID region in '
+        'two channels PNG format')
     args = parser.parse_args()
-    converter(args.source_folder,
-              args.images_json_file,
-              args.categories_json_file,
-              args.segmentations_folder,
-              args.predictions_json_file,
-              args.void)
+    converter(args.source_folder, args.images_json_file,
+              args.categories_json_file, args.segmentations_folder,
+              args.predictions_json_file, args.void)

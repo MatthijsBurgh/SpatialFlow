@@ -1,22 +1,22 @@
-"""This script converts detection COCO format to panoptic COCO format. More
-information about the formats can be found here:
+"""This script converts detection COCO format to panoptic COCO format.
+
+More information about the formats can be found here:
 http://cocodataset.org/#format-data.
 """
-from __future__ import (print_function, absolute_import, division,
+from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
-
-import os
-import os.path as osp
-
 import argparse
 import multiprocessing
+import os
+import os.path as osp
+import time
+
 import mmcv
 import numpy as np
 import PIL.Image as Image
 from pycocotools.coco import COCO as COCO
-import time
 
-from mmdet.core import get_traceback, IdGenerator, MyJsonEncoder
+from mmdet.core import IdGenerator, MyJsonEncoder, get_traceback
 
 
 @get_traceback
@@ -44,8 +44,8 @@ def convert_detection_to_panoptic_coco_format_single_core(
         for ann in anns:
             if ann['category_id'] not in categories:
                 raise Exception('Panoptic coco categories file does not '
-                                'contain category with id: {}'.
-                                format(ann['category_id']))
+                                'contain category with id: {}'.format(
+                                    ann['category_id']))
             segment_id, color = id_generator.get_id_and_color(
                 ann['category_id'])
             mask = coco_detection.annToMask(ann)
@@ -57,8 +57,8 @@ def convert_detection_to_panoptic_coco_format_single_core(
             segments_info.append(ann)
 
         if np.sum(overlaps_map > 1) != 0:
-            raise Exception("Segments for image {} overlap each other.".
-                            format(img_id))
+            raise Exception(
+                'Segments for image {} overlap each other.'.format(img_id))
         panoptic_record['segments_info'] = segments_info
         annotations_panoptic.append(panoptic_record)
 
@@ -78,17 +78,17 @@ def convert_detection_to_panoptic_coco_format(input_json_file,
     if segmentations_folder is None:
         segmentations_folder = output_json_file.rsplit('.', 1)[0]
     if not osp.isdir(segmentations_folder):
-        print("Creating folder {} for panoptic segmentation PNGs".
-              format(segmentations_folder))
+        print('Creating folder {} for panoptic segmentation PNGs'.format(
+            segmentations_folder))
         os.mkdir(segmentations_folder)
 
-    print("CONVERTING...")
-    print("COCO detection format:")
-    print("\tJSON file: {}".format(input_json_file))
-    print("TO")
-    print("COCO panoptic format")
-    print("\tSegmentation folder: {}".format(segmentations_folder))
-    print("\tJSON file: {}".format(output_json_file))
+    print('CONVERTING...')
+    print('COCO detection format:')
+    print('\tJSON file: {}'.format(input_json_file))
+    print('TO')
+    print('COCO panoptic format')
+    print('\tSegmentation folder: {}'.format(segmentations_folder))
+    print('\tJSON file: {}'.format(output_json_file))
     print('\n')
 
     coco_detection = COCO(input_json_file)
@@ -99,8 +99,8 @@ def convert_detection_to_panoptic_coco_format(input_json_file,
 
     cpu_num = multiprocessing.cpu_count()
     img_ids_split = np.array_split(img_ids, cpu_num)
-    print("Number of cores: {}, images per core: {}".
-          format(cpu_num, len(img_ids_split[0])))
+    print('Number of cores: {}, images per core: {}'.format(
+        cpu_num, len(img_ids_split[0])))
     workers = multiprocessing.Pool(processes=cpu_num)
     processes = []
     for proc_id, img_ids in enumerate(img_ids_split):
@@ -119,24 +119,32 @@ def convert_detection_to_panoptic_coco_format(input_json_file,
     mmcv.dump(d_coco, output_json_file, cls=MyJsonEncoder)
 
     t_delta = time.time() - start_time
-    print("Time elapsed: {:0.2f} seconds".format(t_delta))
+    print('Time elapsed: {:0.2f} seconds'.format(t_delta))
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     parser = argparse.ArgumentParser(
-        description="This script converts detection COCO format to panoptic "
-                    "COCO format. See this file's head for more information.")
-    parser.add_argument('--input_json_file', type=str,
-                        help="JSON file with detection COCO format")
-    parser.add_argument('--output_json_file', type=str,
-                        help="JSON file with panoptic COCO format")
+        description='This script converts detection COCO format to panoptic '
+        "COCO format. See this file's head for more information.")
     parser.add_argument(
-        '--segmentations_folder', type=str, default=None,
-        help="Folder with panoptic COCO format segmentations. Default: X if "
-             "output_json_file is X.json")
-    parser.add_argument('--categories_json_file', type=str,
-                        help="JSON file with Panoptic COCO categories infos",
-                        default='./panoptic_coco_categories.json')
+        '--input_json_file',
+        type=str,
+        help='JSON file with detection COCO format')
+    parser.add_argument(
+        '--output_json_file',
+        type=str,
+        help='JSON file with panoptic COCO format')
+    parser.add_argument(
+        '--segmentations_folder',
+        type=str,
+        default=None,
+        help='Folder with panoptic COCO format segmentations. Default: X if '
+        'output_json_file is X.json')
+    parser.add_argument(
+        '--categories_json_file',
+        type=str,
+        help='JSON file with Panoptic COCO categories infos',
+        default='./panoptic_coco_categories.json')
     args = parser.parse_args()
     convert_detection_to_panoptic_coco_format(args.input_json_file,
                                               args.segmentations_folder,

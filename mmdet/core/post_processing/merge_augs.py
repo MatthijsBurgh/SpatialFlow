@@ -47,7 +47,10 @@ def merge_aug_proposals(aug_proposals, img_metas, rpn_test_cfg):
     return merged_proposals
 
 
-def merge_aug_bboxes(aug_bboxes, aug_scores, img_metas, rcnn_test_cfg,
+def merge_aug_bboxes(aug_bboxes,
+                     aug_scores,
+                     img_metas,
+                     rcnn_test_cfg,
                      return_mean=True):
     """Merge augmented detection bboxes and scores.
 

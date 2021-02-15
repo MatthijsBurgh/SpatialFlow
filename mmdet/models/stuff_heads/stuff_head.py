@@ -1,13 +1,13 @@
 import math
 
 import numpy as np
-from mmcv.cnn import constant_init, kaiming_init, ConvModule
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from mmcv.cnn import ConvModule, constant_init, kaiming_init
 
 from mmdet.core import force_fp32
-from ..builder import build_loss, HEADS
+from ..builder import HEADS, build_loss
 
 
 def _make_stuff_lateral_layers(num_conv,
@@ -59,8 +59,9 @@ def _make_stuff_lateral_layers(num_conv,
                     padding=1,
                     conv_cfg=conv_cfg,
                     norm_cfg=norm_cfg))
-            lateral_conv.append(nn.Upsample(
-                scale_factor=2, mode=upsample_method, align_corners=True))
+            lateral_conv.append(
+                nn.Upsample(
+                    scale_factor=2, mode=upsample_method, align_corners=True))
     return nn.Sequential(*lateral_conv)
 
 
@@ -110,11 +111,13 @@ class StuffHead(nn.Module):
         # fp16
         self.fp16_enabled = False
 
-        self.num_ups = [int(math.log2(feat_stride // self.out_stride))
-                        for feat_stride in self.feat_strides]
-        self.num_lateral_convs = [num_up + 1
-                                  if num_up == 0 else num_up
-                                  for num_up in self.num_ups]
+        self.num_ups = [
+            int(math.log2(feat_stride // self.out_stride))
+            for feat_stride in self.feat_strides
+        ]
+        self.num_lateral_convs = [
+            num_up + 1 if num_up == 0 else num_up for num_up in self.num_ups
+        ]
         self._init_layers()
 
     def _init_layers(self):
@@ -122,13 +125,16 @@ class StuffHead(nn.Module):
         self.lateral_convs = nn.ModuleList()
         for num_conv, num_up in zip(self.num_lateral_convs, self.num_ups):
             lateral_conv = _make_stuff_lateral_layers(
-                num_conv, num_up, self.in_channels, self.feat_channels,
-                conv_cfg=self.conv_cfg, norm_cfg=self.norm_cfg,
+                num_conv,
+                num_up,
+                self.in_channels,
+                self.feat_channels,
+                conv_cfg=self.conv_cfg,
+                norm_cfg=self.norm_cfg,
                 upsample_method=self.upsample_method)
             self.lateral_convs.append(lateral_conv)
-        self.conv = nn.Conv2d(self.feat_channels,
-                              self.stuff_num_classes,
-                              kernel_size=1)
+        self.conv = nn.Conv2d(
+            self.feat_channels, self.stuff_num_classes, kernel_size=1)
         self.upsample = nn.Upsample(
             scale_factor=4, mode='bilinear', align_corners=True)
 
@@ -146,31 +152,33 @@ class StuffHead(nn.Module):
         return up_feat
 
     def forward(self, feats, return_feats=False):
-        up_feats = [self.forward_single(feats[idx], lateral_conv)
-                    for idx, lateral_conv in zip(self.feat_indexes,
-                                                 self.lateral_convs)]
+        up_feats = [
+            self.forward_single(feats[idx], lateral_conv)
+            for idx, lateral_conv in zip(self.feat_indexes, self.lateral_convs)
+        ]
         feat_outs = sum(up_feats)
         score_maps = self.conv(feat_outs)
         score_maps = self.upsample(score_maps)
         return score_maps
 
-    @force_fp32(apply_to=('score_maps',))
+    @force_fp32(apply_to=('score_maps', ))
     def loss(self, score_maps, stuff_map_targets, img_metas):
         valid_h, valid_w, _ = img_metas[0]['img_shape']
-        stuff_weights = stuff_map_targets.new_zeros(stuff_map_targets.size(),
-                                                    dtype=torch.float)
+        stuff_weights = stuff_map_targets.new_zeros(
+            stuff_map_targets.size(), dtype=torch.float)
         stuff_weights[..., :valid_h, :valid_w] = 1.
         valid_num_samples = max(
             torch.sum(stuff_weights > 0).float().item(), 1.)
         # loss stuff
-        loss_stuff = self.loss_stuff(score_maps,
-                                     stuff_map_targets.squeeze(1).long(),
-                                     stuff_weights,
-                                     avg_factor=valid_num_samples,
-                                     ignore_index=self.ignore_index)
+        loss_stuff = self.loss_stuff(
+            score_maps,
+            stuff_map_targets.squeeze(1).long(),
+            stuff_weights,
+            avg_factor=valid_num_samples,
+            ignore_index=self.ignore_index)
         return dict(loss_stuff=loss_stuff)
 
-    @force_fp32(apply_to=('score_maps',))
+    @force_fp32(apply_to=('score_maps', ))
     def get_stuff_map(self, score_maps, img_metas, rescale=True):
         """Get the predicted stuff semantic segmentation masks.
 
@@ -203,7 +211,7 @@ class StuffHead(nn.Module):
                 dict(stuff_map=stuffs, img_shape=(img_w, img_h)))
         return stuff_segms
 
-    @force_fp32(apply_to=('score_maps',))
+    @force_fp32(apply_to=('score_maps', ))
     def get_stuff_map_aug(self,
                           score_maps,
                           img_metas,
@@ -243,8 +251,10 @@ class StuffHead(nn.Module):
                     ..., :valid_h, :valid_w]
                 if rescale:
                     score_map_img_scale = F.interpolate(
-                        score_map_img_scale.unsqueeze(0), size=(img_h, img_w),
-                        mode='bilinear', align_corners=True)
+                        score_map_img_scale.unsqueeze(0),
+                        size=(img_h, img_w),
+                        mode='bilinear',
+                        align_corners=True)
                 if flip:
                     inv_idx = torch.arange(
                         score_map_img_scale.size(-1) - 1, -1, -1).long()

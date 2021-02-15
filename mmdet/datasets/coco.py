@@ -10,7 +10,7 @@ from pycocotools.coco import COCO
 from pycocotools.cocoeval import COCOeval
 from terminaltables import AsciiTable
 
-from mmdet.core import eval_recalls, combine_panoptic_predictions, pq_compute
+from mmdet.core import combine_panoptic_predictions, eval_recalls, pq_compute
 from .builder import DATASETS
 from .custom import CustomDataset
 
@@ -35,44 +35,37 @@ class CocoDataset(CustomDataset):
             active, `things_other` is available.
     """
 
-    THINGS_CLASSES = ('person', 'bicycle', 'car', 'motorcycle', 'airplane',
-                      'bus', 'train', 'truck', 'boat', 'traffic_light',
-                      'fire_hydrant', 'stop_sign', 'parking_meter', 'bench',
-                      'bird', 'cat', 'dog', 'horse', 'sheep', 'cow',
-                      'elephant', 'bear', 'zebra', 'giraffe', 'backpack',
-                      'umbrella', 'handbag', 'tie', 'suitcase', 'frisbee',
-                      'skis', 'snowboard', 'sports_ball', 'kite',
-                      'baseball_bat', 'baseball_glove', 'skateboard',
-                      'surfboard', 'tennis_racket', 'bottle', 'wine_glass',
-                      'cup', 'fork', 'knife', 'spoon', 'bowl', 'banana',
-                      'apple', 'sandwich', 'orange', 'broccoli', 'carrot',
-                      'hot_dog', 'pizza', 'donut', 'cake', 'chair', 'couch',
-                      'potted_plant', 'bed', 'dining_table', 'toilet', 'tv',
-                      'laptop', 'mouse', 'remote', 'keyboard', 'cell_phone',
-                      'microwave', 'oven', 'toaster', 'sink',
-                      'refrigerator', 'book', 'clock', 'vase', 'scissors',
-                      'teddy_bear', 'hair_drier', 'toothbrush')
+    THINGS_CLASSES = (
+        'person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus', 'train',
+        'truck', 'boat', 'traffic_light', 'fire_hydrant', 'stop_sign',
+        'parking_meter', 'bench', 'bird', 'cat', 'dog', 'horse', 'sheep',
+        'cow', 'elephant', 'bear', 'zebra', 'giraffe', 'backpack', 'umbrella',
+        'handbag', 'tie', 'suitcase', 'frisbee', 'skis', 'snowboard',
+        'sports_ball', 'kite', 'baseball_bat', 'baseball_glove', 'skateboard',
+        'surfboard', 'tennis_racket', 'bottle', 'wine_glass', 'cup', 'fork',
+        'knife', 'spoon', 'bowl', 'banana', 'apple', 'sandwich', 'orange',
+        'broccoli', 'carrot', 'hot_dog', 'pizza', 'donut', 'cake', 'chair',
+        'couch', 'potted_plant', 'bed', 'dining_table', 'toilet', 'tv',
+        'laptop', 'mouse', 'remote', 'keyboard', 'cell_phone', 'microwave',
+        'oven', 'toaster', 'sink', 'refrigerator', 'book', 'clock', 'vase',
+        'scissors', 'teddy_bear', 'hair_drier', 'toothbrush')
     STUFF_CLASSES = ('banner', 'blanket', 'bridge', 'cardboard', 'counter',
-                     'curtain', 'door-stuff', 'floor-wood', 'flower',
-                     'fruit', 'gravel', 'house', 'light', 'mirror-stuff',
-                     'net', 'pillow', 'platform', 'playingfield',
-                     'railroad', 'river', 'road', 'roof', 'sand', 'sea',
-                     'shelf', 'snow', 'stairs', 'tent', 'towel',
-                     'wall-brick', 'wall-stone', 'wall-tile', 'wall-wood',
-                     'water-other', 'window-blind', 'window-other',
-                     'things-other', 'tree-merged', 'fence-merged',
-                     'ceiling-merged', 'sky-other-merged', 'cabinet-merged',
-                     'table-merged', 'floor-other-merged',
+                     'curtain', 'door-stuff', 'floor-wood', 'flower', 'fruit',
+                     'gravel', 'house', 'light', 'mirror-stuff', 'net',
+                     'pillow', 'platform', 'playingfield', 'railroad', 'river',
+                     'road', 'roof', 'sand', 'sea', 'shelf', 'snow', 'stairs',
+                     'tent', 'towel', 'wall-brick', 'wall-stone', 'wall-tile',
+                     'wall-wood', 'water-other', 'window-blind',
+                     'window-other', 'things-other', 'tree-merged',
+                     'fence-merged', 'ceiling-merged', 'sky-other-merged',
+                     'cabinet-merged', 'table-merged', 'floor-other-merged',
                      'pavement-merged', 'mountain-merged', 'grass-merged',
                      'dirt-merged', 'paper-merged', 'food-other-merged',
                      'building-other-merged', 'rock-merged',
                      'wall-other-merged', 'rug-merged')
     CLASSES = THINGS_CLASSES + STUFF_CLASSES
 
-    def __init__(self,
-                 with_panoptic=False,
-                 things_other=False,
-                 **kwargs):
+    def __init__(self, with_panoptic=False, things_other=False, **kwargs):
         # set as panoptic segmentation
         self.with_panoptic = with_panoptic
         # map things to `other` or keep the original category
@@ -80,18 +73,15 @@ class CocoDataset(CustomDataset):
 
         super(CocoDataset, self).__init__(**kwargs)
 
-        self.cat2label = {
-            cat_id: i
-            for i, cat_id in enumerate(self.cat_ids)
-        }
+        self.cat2label = {cat_id: i for i, cat_id in enumerate(self.cat_ids)}
         # for panoptic segmentation
-        self.seg_ids = [92, 93, 95, 100, 107, 109, 112, 118, 119,
-                        122, 125, 128, 130, 133, 138, 141, 144,
-                        145, 147, 148, 149, 151, 154, 155, 156,
-                        159, 161, 166, 168, 171, 175, 176, 177,
-                        178, 180, 181, 183, 184, 185, 186, 187,
-                        188, 189, 190, 191, 192, 193, 194, 195,
-                        196, 197, 198, 199, 200]
+        self.seg_ids = [
+            92, 93, 95, 100, 107, 109, 112, 118, 119, 122, 125, 128, 130, 133,
+            138, 141, 144, 145, 147, 148, 149, 151, 154, 155, 156, 159, 161,
+            166, 168, 171, 175, 176, 177, 178, 180, 181, 183, 184, 185, 186,
+            187, 188, 189, 190, 191, 192, 193, 194, 195, 196, 197, 198, 199,
+            200
+        ]
         if not self.things_other:
             # remove 'things-other' (convert tuple to list)
             self.STUFF_CLASSES = list(self.STUFF_CLASSES)
@@ -543,8 +533,9 @@ class CocoDataset(CustomDataset):
         """
 
         metrics = metric if isinstance(metric, list) else [metric]
-        allowed_metrics = ['bbox', 'segm', 'proposal', 'proposal_fast',
-                           'panoptic']
+        allowed_metrics = [
+            'bbox', 'segm', 'proposal', 'proposal_fast', 'panoptic'
+        ]
         for metric in metrics:
             if metric not in allowed_metrics:
                 raise KeyError(f'metric {metric} is not supported')
@@ -571,23 +562,22 @@ class CocoDataset(CustomDataset):
                 bbox_out_file = result_files['bbox']
                 using_bbox = cfg.get('using_bbox', False)
                 bbox_overlap_thr = cfg.get('bbox_overlap_thr', 0.)
-                combine_panoptic_predictions(stuff_out_file,
-                                             ins_out_file,
-                                             bbox_out_file,
-                                             cfg.images_json_file,
-                                             cfg.categories_json_file,
-                                             cfg.segmentations_folder,
-                                             cfg.panoptic_json_file,
-                                             cfg.confidence_thr,
-                                             bbox_overlap_thr,
-                                             cfg.overlap_thr,
-                                             cfg.stuff_area_limit,
-                                             using_bbox=using_bbox)
-                pq_compute(cfg.gt_json_file,
-                           cfg.panoptic_json_file, cfg.gt_folder,
-                           cfg.segmentations_folder,
-                           logger)
-                return "Panoptic Segmentation Evaluated successfully!!!"
+                combine_panoptic_predictions(
+                    stuff_out_file,
+                    ins_out_file,
+                    bbox_out_file,
+                    cfg.images_json_file,
+                    cfg.categories_json_file,
+                    cfg.segmentations_folder,
+                    cfg.panoptic_json_file,
+                    cfg.confidence_thr,
+                    bbox_overlap_thr,
+                    cfg.overlap_thr,
+                    cfg.stuff_area_limit,
+                    using_bbox=using_bbox)
+                pq_compute(cfg.gt_json_file, cfg.panoptic_json_file,
+                           cfg.gt_folder, cfg.segmentations_folder, logger)
+                return 'Panoptic Segmentation Evaluated successfully!!!'
 
             if metric == 'proposal_fast':
                 ar = self.fast_eval_recall(

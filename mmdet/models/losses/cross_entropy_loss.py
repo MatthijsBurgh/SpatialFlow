@@ -29,8 +29,8 @@ def cross_entropy(pred,
         torch.Tensor: The calculated loss
     """
     # element-wise losses
-    loss = F.cross_entropy(pred, label, weight=class_weight,
-                           reduction='none', **kwargs)
+    loss = F.cross_entropy(
+        pred, label, weight=class_weight, reduction='none', **kwargs)
 
     # apply weights and do the reduction
     if weight is not None:

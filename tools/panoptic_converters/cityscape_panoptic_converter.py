@@ -1,11 +1,10 @@
-from __future__ import (print_function, absolute_import, division,
+from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
-
-from collections import namedtuple
+import glob
 import os
 import os.path as osp
+from collections import namedtuple
 
-import glob
 import mmcv
 import numpy as np
 import PIL.Image as Image
@@ -17,42 +16,36 @@ from mmdet.core import IdGenerator, MyJsonEncoder
 # -----------------------------------------------------------------------------
 
 # a label and all meta information
-Label = namedtuple('Label', [
-
-    'name',  # The identifier of this label, e.g. 'car', 'person', ... .
-    # We use them to uniquely name a class
-
-    'id',  # An integer ID that is associated with this label.
-    # The IDs are used to represent the label in ground truth images
-    # An ID of -1 means that this label does not have an ID and thus
-    # is ignored when creating ground truth images (e.g. license plate).
-    # Do not modify these IDs, since exactly these IDs are expected by the
-    # evaluation server.
-
-    'trainId',  # Feel free to modify these IDs as suitable for your method.
-    # Then create ground truth images with train IDs, using the tools
-    # provided in the 'preparation' folder. However, make sure to validate or
-    # submit results to our evaluation server using the regular IDs above!
-    # For trainIds, multiple labels might have the same ID. Then, these labels
-    # are mapped to the same class in the ground truth images. For the inverse
-    # mapping, we use the label that is defined first in the list below.
-    # For example, mapping all void-type classes to the same ID in training,
-    # might make sense for some approaches.
-    # Max value is 255!
-
-    'category',  # The name of the category that this label belongs to
-
-    'categoryId',  # The ID of this category. Used to create ground truth
-    # images on category level.
-
-    'hasInstances',  # Whether this label distinguishes between single
-    # instances or not
-
-    'ignoreInEval',  # Whether pixels having this class as ground truth
-    # label are ignored during evaluations or not
-
-    'color',  # The color of this label
-])
+Label = namedtuple(
+    'Label',
+    [
+        'name',  # The identifier of this label, e.g. 'car', 'person', ... .
+        # We use them to uniquely name a class
+        'id',  # An integer ID that is associated with this label.
+        # The IDs are used to represent the label in ground truth images
+        # An ID of -1 means that this label does not have an ID and thus
+        # is ignored when creating ground truth images (e.g. license plate).
+        # Do not modify these IDs, since exactly these IDs are expected by the
+        # evaluation server.
+        'trainId',  # Feel free to modify these IDs as suitable for your method.
+        # Then create ground truth images with train IDs, using the tools
+        # provided in the 'preparation' folder. However, make sure to validate or
+        # submit results to our evaluation server using the regular IDs above!
+        # For trainIds, multiple labels might have the same ID. Then, these labels
+        # are mapped to the same class in the ground truth images. For the inverse
+        # mapping, we use the label that is defined first in the list below.
+        # For example, mapping all void-type classes to the same ID in training,
+        # might make sense for some approaches.
+        # Max value is 255!
+        'category',  # The name of the category that this label belongs to
+        'categoryId',  # The ID of this category. Used to create ground truth
+        # images on category level.
+        'hasInstances',  # Whether this label distinguishes between single
+        # instances or not
+        'ignoreInEval',  # Whether pixels having this class as ground truth
+        # label are ignored during evaluations or not
+        'color',  # The color of this label
+    ])
 
 # ------------------------------------------------------------------------------
 # A list of all labels
@@ -81,7 +74,8 @@ labels = [
     Label('building', 11, 2, 'construction', 2, False, False, (70, 70, 70)),
     Label('wall', 12, 3, 'construction', 2, False, False, (102, 102, 156)),
     Label('fence', 13, 4, 'construction', 2, False, False, (190, 153, 153)),
-    Label('guard rail', 14, 255, 'construction', 2, False, True, (180, 165, 180)),  # noqa
+    Label('guard rail', 14, 255, 'construction', 2, False, True,
+          (180, 165, 180)),  # noqa
     Label('bridge', 15, 255, 'construction', 2, False, True, (150, 100, 100)),
     Label('tunnel', 16, 255, 'construction', 2, False, True, (150, 120, 90)),
     Label('pole', 17, 5, 'object', 3, False, False, (153, 153, 153)),
@@ -103,7 +97,6 @@ labels = [
     Label('bicycle', 33, 18, 'vehicle', 7, True, False, (119, 11, 32)),
     Label('license plate', -1, -1, 'vehicle', 7, False, True, (0, 0, 142)),
 ]
-
 
 # -----------------------------------------------------------------------------
 # Create dictionaries for a fast lookup
@@ -131,13 +124,10 @@ for label in labels:
 # -----------------------------------------------------------------------------
 
 
-def cityscape_panoptic_converter(original_folder_format,
-                                 out_folder_format,
-                                 out_file_format,
-                                 category_file,
-                                 data_split):
-    """Convert the gt files in original folder to a new panoptic json file
-    and convert the gt png into a new panoptic directory..
+def cityscape_panoptic_converter(original_folder_format, out_folder_format,
+                                 out_file_format, category_file, data_split):
+    """Convert the gt files in original folder to a new panoptic json file and
+    convert the gt png into a new panoptic directory..
 
     Args:
         original_folder_format (str): The gt folder for specific data split.
@@ -148,19 +138,21 @@ def cityscape_panoptic_converter(original_folder_format,
     """
     out_folder = out_folder_format.format(data_split)
     if not osp.isdir(out_folder):
-        print("Creating folder {} for panoptic segmentation PNGs".
-              format(out_folder))
+        print('Creating folder {} for panoptic segmentation PNGs'.format(
+            out_folder))
         os.mkdir(out_folder)
 
     categories = []
     for idx, el in enumerate(labels):
         if el.ignoreInEval:
             continue
-        categories.append({'id': el.id,
-                           'name': el.name,
-                           'color': el.color,
-                           'supercategory': el.category,
-                           'isthing': 1 if el.hasInstances else 0})
+        categories.append({
+            'id': el.id,
+            'name': el.name,
+            'color': el.color,
+            'supercategory': el.category,
+            'isthing': 1 if el.hasInstances else 0
+        })
 
     categories_dict = {cat['id']: cat for cat in categories}
 
@@ -181,10 +173,12 @@ def cityscape_panoptic_converter(original_folder_format,
         image_id = file_name.rsplit('_', 2)[0]
         image_filename = '{}/{}_leftImg8bit.png'.format(dir, image_id)
         # image entry, id for image is its filename without extension
-        images.append({"id": image_id,
-                       "width": original_format.shape[1],
-                       "height": original_format.shape[0],
-                       "file_name": image_filename})
+        images.append({
+            'id': image_id,
+            'width': original_format.shape[1],
+            'height': original_format.shape[0],
+            'file_name': image_filename
+        })
 
         pan_format = np.zeros(
             (original_format.shape[0], original_format.shape[1], 3),
@@ -221,22 +215,27 @@ def cityscape_panoptic_converter(original_folder_format,
             height = vert_idx[-1] - y + 1
             bbox = [x, y, width, height]
 
-            segm_info.append({"id": int(segment_id),
-                              "category_id": int(semantic_id),
-                              "area": area,
-                              "bbox": bbox,
-                              "iscrowd": is_crowd})
+            segm_info.append({
+                'id': int(segment_id),
+                'category_id': int(semantic_id),
+                'area': area,
+                'bbox': bbox,
+                'iscrowd': is_crowd
+            })
 
-        annotations.append({'image_id': image_id,
-                            'file_name': file_name,
-                            "segments_info": segm_info})
+        annotations.append({
+            'image_id': image_id,
+            'file_name': file_name,
+            'segments_info': segm_info
+        })
 
         Image.fromarray(pan_format).save(os.path.join(out_folder, file_name))
 
-    d = {'images': images,
-         'annotations': annotations,
-         'categories': categories,
-         }
+    d = {
+        'images': images,
+        'annotations': annotations,
+        'categories': categories,
+    }
     mmcv.dump(categories, category_file, cls=MyJsonEncoder)
     mmcv.dump(d, out_file_format.format(data_split), cls=MyJsonEncoder)
 
@@ -250,10 +249,8 @@ def main():
     data_splits = ['val']
     for data_split in data_splits:
         print('Data split: {}'.format(data_split))
-        cityscape_panoptic_converter(original_folder_format,
-                                     out_folder_format,
-                                     out_file_format,
-                                     category_file,
+        cityscape_panoptic_converter(original_folder_format, out_folder_format,
+                                     out_file_format, category_file,
                                      data_split)
 
 

@@ -36,31 +36,34 @@ data = dict(
     workers_per_gpu=2,
     train=dict(
         type=dataset_type,
-        ann_file=data_root + 'annotations/panoptic_train2017_detection_format_things_only.json',
+        ann_file=data_root +
+        'annotations/panoptic_train2017_detection_format_things_only.json',
         img_prefix=data_root + 'train2017/',
         with_panoptic=True,
         things_other=True,
         pipeline=train_pipeline,
         seg_prefix=data_root +
-                   'annotations/panoptic_train2017_semantic_segmentation_things_other_pngs/'
+        'annotations/panoptic_train2017_semantic_segmentation_things_other_pngs/'
     ),
     val=dict(
         type=dataset_type,
-        ann_file=data_root + 'annotations/panoptic_val2017_detection_format_things_only.json',
+        ann_file=data_root +
+        'annotations/panoptic_val2017_detection_format_things_only.json',
         img_prefix=data_root + 'val2017/',
         with_panoptic=True,
         things_other=True,
         pipeline=test_pipeline),
     test=dict(
         type=dataset_type,
-        ann_file=data_root + 'annotations/panoptic_val2017_detection_format_things_only.json',
+        ann_file=data_root +
+        'annotations/panoptic_val2017_detection_format_things_only.json',
         img_prefix=data_root + 'val2017/',
         with_panoptic=True,
         things_other=True,
         pipeline=test_pipeline))
 evaluation = dict(metric=['panoptic'])
 # panoptic settings
-images_json_file=data_root + 'annotations/panoptic_val2017_detection_format_things_only.json'
-categories_json_file=data_root + 'annotations/panoptic_coco_categories.json'
-gt_json_file=data_root + 'annotations/panoptic_val2017.json'
-gt_folder=data_root + 'annotations/panoptic_val2017/'
+images_json_file = data_root + 'annotations/panoptic_val2017_detection_format_things_only.json'
+categories_json_file = data_root + 'annotations/panoptic_coco_categories.json'
+gt_json_file = data_root + 'annotations/panoptic_val2017.json'
+gt_folder = data_root + 'annotations/panoptic_val2017/'

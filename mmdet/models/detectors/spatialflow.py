@@ -2,9 +2,9 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from mmdet.core import (bbox2result, bbox2roi, build_assigner,
+from mmdet.core import (bbox2result, bbox2roi, bbox_mapping, build_assigner,
                         build_sampler, merge_aug_bboxes, merge_aug_masks,
-                        multiclass_nms, bbox_mapping)
+                        multiclass_nms)
 from ..builder import (DETECTORS, build_backbone, build_head, build_neck,
                        build_roi_extractor)
 from .base import BaseDetector
@@ -34,8 +34,7 @@ class SpatialFlow(BaseDetector):
             bbox_head.update(test_cfg=test_cfg.single_stage)
             self.bbox_head = build_head(bbox_head)
         if mask_head is not None:
-            self.mask_roi_extractor = build_roi_extractor(
-                mask_roi_extractor)
+            self.mask_roi_extractor = build_roi_extractor(mask_roi_extractor)
             self.mask_head = build_head(mask_head)
         if stuff_head is not None:
             self.stuff_head = build_head(stuff_head)
@@ -85,16 +84,15 @@ class SpatialFlow(BaseDetector):
 
         # bbox head forward and loss
         bbox_outs = self.bbox_head(x)
-        bbox_loss_inputs = bbox_outs[:2] + (
-            gt_bboxes, gt_labels, img_metas)
+        bbox_loss_inputs = bbox_outs[:2] + (gt_bboxes, gt_labels, img_metas)
         bbox_losses = self.bbox_head.loss(
             *bbox_loss_inputs, gt_bboxes_ignore=gt_bboxes_ignore)
         losses.update(bbox_losses)
 
         # mask
         # get det bboxes for each image after nms
-        bbox_inputs = bbox_outs[:2] + (
-            img_metas, self.train_cfg.single_stage_nms)
+        bbox_inputs = bbox_outs[:2] + (img_metas,
+                                       self.train_cfg.single_stage_nms)
         bbox_list = self.bbox_head.get_bboxes(*bbox_inputs)
         single_stage_bboxes_list = []
         for bbox, labels in bbox_list:
@@ -110,11 +108,10 @@ class SpatialFlow(BaseDetector):
             gt_bboxes_ignore = [None for _ in range(num_imgs)]
         sampling_results = []
         for i in range(num_imgs):
-            assign_result = mask_assigner.assign(
-                single_stage_bboxes_list[i],
-                gt_bboxes[i],
-                gt_bboxes_ignore[i],
-                gt_labels[i])
+            assign_result = mask_assigner.assign(single_stage_bboxes_list[i],
+                                                 gt_bboxes[i],
+                                                 gt_bboxes_ignore[i],
+                                                 gt_labels[i])
             sampling_result = mask_sampler.sample(
                 assign_result,
                 single_stage_bboxes_list[i],
@@ -136,10 +133,8 @@ class SpatialFlow(BaseDetector):
 
         mask_targets = self.mask_head.get_targets(
             sampling_results, gt_masks, self.train_cfg.single_stage_mask)
-        pos_labels = torch.cat(
-            [res.pos_gt_labels for res in sampling_results])
-        loss_mask = self.mask_head.loss(mask_pred, mask_targets,
-                                        pos_labels)
+        pos_labels = torch.cat([res.pos_gt_labels for res in sampling_results])
+        loss_mask = self.mask_head.loss(mask_pred, mask_targets, pos_labels)
         losses.update(loss_mask)
 
         # stuff head
@@ -148,8 +143,8 @@ class SpatialFlow(BaseDetector):
 
         stuff_outs = self.stuff_head(
             stuff_head_inputs[:len(self.stuff_head.feat_strides)])
-        loss_stuff = self.stuff_head.loss(
-            stuff_outs, gt_semantic_seg, img_metas)
+        loss_stuff = self.stuff_head.loss(stuff_outs, gt_semantic_seg,
+                                          img_metas)
         losses.update(loss_stuff)
 
         return losses
@@ -158,8 +153,8 @@ class SpatialFlow(BaseDetector):
         x = self.extract_feat(img)
 
         bbox_outs = self.bbox_head(x)
-        bbox_inputs = bbox_outs[:2] + (
-            img_meta, self.test_cfg.single_stage, rescale)
+        bbox_inputs = bbox_outs[:2] + (img_meta, self.test_cfg.single_stage,
+                                       rescale)
         det_results = self.bbox_head.get_bboxes(*bbox_inputs)
         bbox_results = [
             bbox2result(det_bboxes, det_labels, self.bbox_head.num_classes)
@@ -189,8 +184,8 @@ class SpatialFlow(BaseDetector):
         # some times rois is an empty tensor
         if mask_feats.shape[0] == 0:
             mask_pred = mask_feats.new_zeros(
-                mask_feats.size(0), mask_feats.size(1),
-                2 * mask_feats.size(2), 2 * mask_feats.size(3))
+                mask_feats.size(0), mask_feats.size(1), 2 * mask_feats.size(2),
+                2 * mask_feats.size(3))
         else:
             mask_pred = self.mask_head(mask_feats)
         segm_results = []
@@ -203,8 +198,8 @@ class SpatialFlow(BaseDetector):
             scale_factor = meta['scale_factor']
             segm_result = self.mask_head.get_seg_masks(
                 mask_pred_img, _bboxes_img, det_labels_img,
-                self.test_cfg.single_stage_mask,
-                ori_shape, scale_factor, rescale)
+                self.test_cfg.single_stage_mask, ori_shape, scale_factor,
+                rescale)
             segm_results.append(segm_result)
 
         # stuff subnet
@@ -220,7 +215,6 @@ class SpatialFlow(BaseDetector):
             bbox_segm_stuff_results.append(
                 (bbox_result, segm_result, stuff_result))
         return bbox_segm_stuff_results[0]
-
 
     def aug_test(self, imgs, img_metas, rescale=False):
         """Test with augmentation."""
@@ -257,10 +251,13 @@ class SpatialFlow(BaseDetector):
             aug_img_metas.append(aug_img_meta)
 
         det_results = []
-        for aug_bbox, aug_score, aug_img_meta in zip(
-                aug_bboxes, aug_scores, aug_img_metas):
+        for aug_bbox, aug_score, aug_img_meta in zip(aug_bboxes, aug_scores,
+                                                     aug_img_metas):
             merged_bboxes, merged_scores = merge_aug_bboxes(
-                aug_bbox, aug_score, aug_img_meta, single_stage_cfg,
+                aug_bbox,
+                aug_score,
+                aug_img_meta,
+                single_stage_cfg,
                 return_mean=False)
             det_bboxes, det_labels = multiclass_nms(
                 merged_bboxes, merged_scores, single_stage_cfg.score_thr,
@@ -271,7 +268,6 @@ class SpatialFlow(BaseDetector):
             bbox2result(det_bboxes, det_labels, self.bbox_head.num_classes)
             for det_bboxes, det_labels in det_results
         ]
-
 
         # mask
         imgs_per_gpu = len(img_metas[0])
@@ -286,13 +282,12 @@ class SpatialFlow(BaseDetector):
                 img_shape = meta['img_shape']
                 scale_factor = meta['scale_factor']
                 flip = meta['flip']
-                scaled_det_bboxes = bbox_mapping(det_bboxes[:, :4],
-                                                 img_shape, scale_factor, flip)
+                scaled_det_bboxes = bbox_mapping(det_bboxes[:, :4], img_shape,
+                                                 scale_factor, flip)
                 scaled_det_results.append(scaled_det_bboxes)
             mask_rois = bbox2roi(scaled_det_results)
             mask_feats = self.mask_roi_extractor(
-                x[:len(self.mask_roi_extractor.featmap_strides)],
-                mask_rois)
+                x[:len(self.mask_roi_extractor.featmap_strides)], mask_rois)
             mask_pred = self.mask_head(mask_feats)
             for img_id, meta in enumerate(img_meta):
                 idx_img = mask_rois[:, 0] == img_id
@@ -302,8 +297,8 @@ class SpatialFlow(BaseDetector):
                 aug_masks[img_id].append(mask_pred_img_np)
 
         segm_results = []
-        for det_result, aug_mask, aug_img_meta in zip(
-                det_results, aug_masks, aug_img_metas):
+        for det_result, aug_mask, aug_img_meta in zip(det_results, aug_masks,
+                                                      aug_img_metas):
             det_bboxes, det_labels = det_result
             merged_masks = merge_aug_masks(aug_mask, aug_img_meta,
                                            self.test_cfg.single_stage_mask)

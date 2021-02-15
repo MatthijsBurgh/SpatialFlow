@@ -1,16 +1,15 @@
 from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
-
-import os
+import argparse
 import json
+import multiprocessing
+import os
 import time
 from collections import defaultdict
 
-import argparse
-import multiprocessing
-from mmcv.utils import print_log
 import numpy as np
 import PIL.Image as Image
+from mmcv.utils import print_log
 
 from ..utils import get_traceback, rgb2id
 
@@ -19,6 +18,7 @@ VOID = 0
 
 
 class PQStatCat(object):
+
     def __init__(self):
         self.iou = 0.0
         self.tp = 0
@@ -34,6 +34,7 @@ class PQStatCat(object):
 
 
 class PQStat(object):
+
     def __init__(self):
         self.pq_per_cat = defaultdict(PQStatCat)
 
@@ -65,7 +66,9 @@ class PQStat(object):
             sq_class = iou / tp if tp != 0 else 0
             rq_class = tp / (tp + 0.5 * fp + 0.5 * fn)
             per_class_results[label] = {
-                'pq': pq_class, 'sq': sq_class, 'rq': rq_class
+                'pq': pq_class,
+                'sq': sq_class,
+                'rq': rq_class
             }
             pq += pq_class
             sq += sq_class
@@ -76,10 +79,7 @@ class PQStat(object):
 
 
 @get_traceback
-def pq_compute_single_core(proc_id,
-                           annotation_set,
-                           gt_folder,
-                           pred_folder,
+def pq_compute_single_core(proc_id, annotation_set, gt_folder, pred_folder,
                            categories):
     pq_stat = PQStat()
 
@@ -90,11 +90,13 @@ def pq_compute_single_core(proc_id,
                 proc_id, idx, len(annotation_set)))
         idx += 1
 
-        pan_gt = np.array(Image.open(
-            os.path.join(gt_folder, gt_ann['file_name'])), dtype=np.uint32)
+        pan_gt = np.array(
+            Image.open(os.path.join(gt_folder, gt_ann['file_name'])),
+            dtype=np.uint32)
         pan_gt = rgb2id(pan_gt)
-        pan_pred = np.array(Image.open(
-            os.path.join(pred_folder, pred_ann['file_name'])), dtype=np.uint32)
+        pan_pred = np.array(
+            Image.open(os.path.join(pred_folder, pred_ann['file_name'])),
+            dtype=np.uint32)
         pan_pred = rgb2id(pan_pred)
 
         gt_segms = {el['id']: el for el in gt_ann['segments_info']}
@@ -107,20 +109,22 @@ def pq_compute_single_core(proc_id,
             if label not in pred_segms:
                 if label == VOID:
                     continue
-                raise KeyError('In the image with ID {} segment with ID {} is '
-                               'presented in PNG and not presented in JSON.'
-                               .format(gt_ann['image_id'], label))
+                raise KeyError(
+                    'In the image with ID {} segment with ID {} is '
+                    'presented in PNG and not presented in JSON.'.format(
+                        gt_ann['image_id'], label))
             pred_segms[label]['area'] = label_cnt
             pred_labels_set.remove(label)
             if pred_segms[label]['category_id'] not in categories:
                 raise KeyError('In the image with ID {} segment with ID {} '
-                               'has unknown category_id {}.'
-                               .format(gt_ann['image_id'], label,
-                                       pred_segms[label]['category_id']))
+                               'has unknown category_id {}.'.format(
+                                   gt_ann['image_id'], label,
+                                   pred_segms[label]['category_id']))
         if len(pred_labels_set) != 0:
-            raise KeyError('In the image with ID {} the following segment IDs '
-                           '{} are presented in JSON and not presented in PNG.'
-                           .format(gt_ann['image_id'], list(pred_labels_set)))
+            raise KeyError(
+                'In the image with ID {} the following segment IDs '
+                '{} are presented in JSON and not presented in PNG.'.format(
+                    gt_ann['image_id'], list(pred_labels_set)))
 
         # confusion matrix calculation
         pan_gt_pred = pan_gt.astype(np.uint64) * OFFSET + \
@@ -184,8 +188,8 @@ def pq_compute_single_core(proc_id,
             if intersection / pred_info['area'] > 0.5:
                 continue
             pq_stat[pred_info['category_id']].fp += 1
-    print('Core: {}, all {} images processed'.format(
-        proc_id, len(annotation_set)))
+    print('Core: {}, all {} images processed'.format(proc_id,
+                                                     len(annotation_set)))
     return pq_stat
 
 
@@ -207,19 +211,19 @@ def pq_compute(gt_json_file,
         pred_folder = pred_json_file.replace('.json', '')
     categories = {el['id']: el for el in gt_json['categories']}
 
-    print("Evaluation panoptic segmentation metrics:")
-    print("Ground truth:")
-    print("\tSegmentation folder: {}".format(gt_folder))
-    print("\tJSON file: {}".format(gt_json_file))
-    print("Prediction:")
-    print("\tSegmentation folder: {}".format(pred_folder))
-    print("\tJSON file: {}".format(pred_json_file))
+    print('Evaluation panoptic segmentation metrics:')
+    print('Ground truth:')
+    print('\tSegmentation folder: {}'.format(gt_folder))
+    print('\tJSON file: {}'.format(gt_json_file))
+    print('Prediction:')
+    print('\tSegmentation folder: {}'.format(pred_folder))
+    print('\tJSON file: {}'.format(pred_json_file))
 
     if not os.path.isdir(gt_folder):
-        raise Exception("Folder {} with ground truth segmentations "
+        raise Exception('Folder {} with ground truth segmentations '
                         "doesn't exist".format(gt_folder))
     if not os.path.isdir(pred_folder):
-        raise Exception("Folder {} with predicted segmentations "
+        raise Exception('Folder {} with predicted segmentations '
                         "doesn't exist".format(pred_folder))
 
     pred_annotations = {el['image_id']: el for el in pred_json['annotations']}
@@ -233,55 +237,63 @@ def pq_compute(gt_json_file,
 
     cpu_num = multiprocessing.cpu_count()
     annotations_split = np.array_split(matched_annotations_list, cpu_num)
-    print("Number of cores: {}, images per core: {}"
-          .format(cpu_num, len(annotations_split[0])))
+    print('Number of cores: {}, images per core: {}'.format(
+        cpu_num, len(annotations_split[0])))
     workers = multiprocessing.Pool(processes=cpu_num)
     processes = []
     for proc_id, annotation_set in enumerate(annotations_split):
-        p = workers.apply_async(pq_compute_single_core,
-                                (proc_id, annotation_set,
-                                 gt_folder, pred_folder, categories))
+        p = workers.apply_async(
+            pq_compute_single_core,
+            (proc_id, annotation_set, gt_folder, pred_folder, categories))
         processes.append(p)
     pq_stat = PQStat()
     for p in processes:
         pq_stat += p.get()
 
-    metrics = [("All", None), ("Things", True), ("Stuff", False)]
+    metrics = [('All', None), ('Things', True), ('Stuff', False)]
     results = {}
     for name, isthing in metrics:
         results[name], per_class_results = pq_stat.pq_average(
             categories, isthing=isthing)
         if name == 'All':
             results['per_class'] = per_class_results
-    print_log("{:10s}| {:>5s}  {:>5s}  {:>5s} {:>5s}".format(
-        "", "PQ", "SQ", "RQ", "N"), logger=logger)
-    print_log("-" * (10 + 7 * 4), logger=logger)
+    print_log(
+        '{:10s}| {:>5s}  {:>5s}  {:>5s} {:>5s}'.format('', 'PQ', 'SQ', 'RQ',
+                                                       'N'),
+        logger=logger)
+    print_log('-' * (10 + 7 * 4), logger=logger)
 
     for name, _isthing in metrics:
-        print_log("{:10s}| {:5.1f}  {:5.1f}  {:5.1f} {:5d}".format(
-              name, 100 * results[name]['pq'], 100 * results[name]['sq'],
-              100 * results[name]['rq'], results[name]['n']), logger=logger)
+        print_log(
+            '{:10s}| {:5.1f}  {:5.1f}  {:5.1f} {:5d}'.format(
+                name, 100 * results[name]['pq'], 100 * results[name]['sq'],
+                100 * results[name]['rq'], results[name]['n']),
+            logger=logger)
 
     t_delta = time.time() - start_time
-    print("Time elapsed: {:0.2f} seconds".format(t_delta))
+    print('Time elapsed: {:0.2f} seconds'.format(t_delta))
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--gt_json_file', type=str,
-                        help="JSON file with ground truth data")
-    parser.add_argument('--pred_json_file', type=str,
-                        help="JSON file with predictions data")
-    parser.add_argument('--gt_folder', type=str, default=None,
-                        help="Folder with ground turth COCO format "
-                             "segmentations. Default: X if the corresponding "
-                             "json file is X.json")
-    parser.add_argument('--pred_folder', type=str, default=None,
-                        help="Folder with prediction COCO format "
-                             "segmentations. Default: X if the corresponding "
-                             "json file is X.json")
+    parser.add_argument(
+        '--gt_json_file', type=str, help='JSON file with ground truth data')
+    parser.add_argument(
+        '--pred_json_file', type=str, help='JSON file with predictions data')
+    parser.add_argument(
+        '--gt_folder',
+        type=str,
+        default=None,
+        help='Folder with ground turth COCO format '
+        'segmentations. Default: X if the corresponding '
+        'json file is X.json')
+    parser.add_argument(
+        '--pred_folder',
+        type=str,
+        default=None,
+        help='Folder with prediction COCO format '
+        'segmentations. Default: X if the corresponding '
+        'json file is X.json')
     args = parser.parse_args()
-    pq_compute(args.gt_json_file,
-               args.pred_json_file,
-               args.gt_folder,
+    pq_compute(args.gt_json_file, args.pred_json_file, args.gt_folder,
                args.pred_folder)

@@ -1,14 +1,15 @@
-from __future__ import (print_function, absolute_import, division,
+from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 import functools
+import json
 import traceback
 
-import json
 import numpy as np
 
 
 def get_traceback(f):
-    """The decorator is used to prints an error thrown inside process"""
+    """The decorator is used to prints an error thrown inside process."""
+
     @functools.wraps(f)
     def wrapper(*args, **kwargs):
         try:
@@ -17,13 +18,15 @@ def get_traceback(f):
             print('Caught exception in worker thread:')
             traceback.print_exc()
             raise e
+
     return wrapper
 
 
 class IdGenerator():
     """The class is designed to generate unique IDs that have meaningful RGB
-    encoding. Given semantic category unique ID will be generated and its
-    RGB encoding will have color close to the predefined semantic category
+    encoding. Given semantic category unique ID will be generated and its RGB
+    encoding will have color close to the predefined semantic category.
+
     color. The RGB encoding used is ID = R * 256 * G + 256 * 256 + B.
     Class constructor takes dictionary {id: category_info}, where all semantic
     class ids are presented and category_info record is a dict with fields
@@ -38,10 +41,10 @@ class IdGenerator():
                 self.taken_colors.add(tuple(category['color']))
 
     def get_color(self, cat_id):
+
         def random_color(base, max_dist=30):
-            new_color = base + np.random.randint(low=-max_dist,
-                                                 high=max_dist + 1,
-                                                 size=3)
+            new_color = base + np.random.randint(
+                low=-max_dist, high=max_dist + 1, size=3)
             return tuple(np.maximum(0, np.minimum(255, new_color)))
 
         category = self.categories[cat_id]
@@ -95,6 +98,7 @@ def id2rgb(id_map):
 
 
 class MyJsonEncoder(json.JSONEncoder):
+
     def default(self, obj):
         if isinstance(obj, np.integer):
             return int(obj)
