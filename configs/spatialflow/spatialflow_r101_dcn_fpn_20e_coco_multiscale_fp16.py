@@ -57,7 +57,15 @@ data = dict(
 )
 # images_json_file=data_root + 'annotations/instances_test_dev2017.json'
 # panoptic settings
-segmentations_folder = './work_dirs/spatialflow_r101_dcn_fpn_20e_coco_multiscale_fp16/segmentations_folder_val_pred/'
-# segmentations_folder='./work_dirs/spatialflow_r101_dcn_fpn_20e_coco_multiscale_fp16/segmentations_folder_test_pred/'
-panoptic_json_file = './work_dirs/spatialflow_r101_dcn_fpn_20e_coco_multiscale_fp16/panoptic_val_pred.json'
-# panoptic_json_file='./work_dirs/spatialflow_r101_dcn_fpn_20e_coco_multiscale_fp16/panoptic_test_pred.json'
+segmentations_folder = './work_dirs/' \
+                       'spatialflow_r101_dcn_fpn_20e_coco_multiscale_fp16/' \
+                       'segmentations_folder_val_pred/'
+# segmentations_folder = './work_dirs/' \
+#                        'spatialflow_r101_dcn_fpn_20e_coco_multiscale_fp16/' \
+#                        'segmentations_folder_test_pred/'
+panoptic_json_file = './work_dirs/' \
+                     'spatialflow_r101_dcn_fpn_20e_coco_multiscale_fp16/' \
+                     'panoptic_val_pred.json'
+# panoptic_json_file = './work_dirs/' \
+#                      'spatialflow_r101_dcn_fpn_20e_coco_multiscale_fp16/' \
+#                      'panoptic_test_pred.json'

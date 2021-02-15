@@ -43,7 +43,8 @@ data = dict(
         things_other=True,
         pipeline=train_pipeline,
         seg_prefix=data_root +
-        'annotations/panoptic_train2017_semantic_segmentation_things_other_pngs/'
+        'annotations/'
+        'panoptic_train2017_semantic_segmentation_things_other_pngs/'
     ),
     val=dict(
         type=dataset_type,
@@ -63,7 +64,9 @@ data = dict(
         pipeline=test_pipeline))
 evaluation = dict(metric=['panoptic'])
 # panoptic settings
-images_json_file = data_root + 'annotations/panoptic_val2017_detection_format_things_only.json'
+images_json_file = data_root +\
+                   'annotations/' \
+                   'panoptic_val2017_detection_format_things_only.json'
 categories_json_file = data_root + 'annotations/panoptic_coco_categories.json'
 gt_json_file = data_root + 'annotations/panoptic_val2017.json'
 gt_folder = data_root + 'annotations/panoptic_val2017/'
