@@ -42,10 +42,8 @@ data = dict(
         with_panoptic=True,
         things_other=True,
         pipeline=train_pipeline,
-        seg_prefix=data_root +
-        'annotations/'
-        'panoptic_train2017_semantic_segmentation_things_other_pngs/'
-    ),
+        seg_prefix=data_root + 'annotations/'
+        'panoptic_train2017_semantic_segmentation_things_other_pngs/'),
     val=dict(
         type=dataset_type,
         ann_file=data_root +
